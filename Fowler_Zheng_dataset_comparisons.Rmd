@@ -1,0 +1,202 @@
+---
+title: "Fowler and Zheng et al. comparison with other datasets"
+author: "Julie Chen and Sherry Li Zheng"
+last updated: "2024-1-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+SUMMARY: This notebook generates feature plots from cells generated through different differentiation protocols including from Calvanese et al., Canu et al., Michaels et al. and Fowler & Zheng et al. (Fig S7)
+
+Calvanese et al. accession #GSE162950, sample: GSM6205033
+(https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE162950)
+
+Canu et al. accession #E-MTAB-8205, sample:EXP2_CTRL2_4823STDY7231845 (https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-8205?query=E-MTAB-8205)
+
+Michaels et al. accession #GSE207157, sample: GSM6280645 (https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE207157)
+
+```{r}
+library(anndata)
+library(Matrix)
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(biomaRt)
+library(ggplot2)
+```
+
+PART 1: Load in files and process into Seurat objects 
+
+```{r}
+dataset_name <- "Canu"
+```
+
+```{r}
+# Define paths for all data files 
+canu_counts_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Canu/Canu_counts.mtx'
+canu_features_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Canu/Canu_counts.mtx_rows'
+canu_barcodes_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Canu/Canu_counts.mtx_cols'
+
+calvanese_adherent_counts_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Calvanese et al (hPSC protocol)/EB-B-adherent/matrix.mtx'
+calvanese_adherent_features_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Calvanese et al (hPSC protocol)/EB-B-adherent/features.tsv'
+calvanese_adherent_barcodes_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Calvanese et al (hPSC protocol)/EB-B-adherent/barcodes.tsv'
+
+calvanese_susp_counts_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Calvanese et al (hPSC protocol)/EB-B-suspension/matrix.mtx'
+calvanese_susp_features_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Calvanese et al (hPSC protocol)/EB-B-suspension/features.tsv'
+calvanese_susp_barcodes_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Calvanese et al (hPSC protocol)/EB-B-suspension/barcodes.tsv'
+
+michaels_counts_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Michaels et al/GSM6280645_matrix.mtx'
+michaels_features_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Michaels et al/GSM6280645_features.tsv'
+michaels_barcodes_file <- '/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/HSC_comparisons/Michaels et al/GSM6280645_barcodes.tsv'
+
+lookup_filename = "/Users/juliechen/Julie_Chen/loh lab/Computational/2307_hsapiens_lookup.txt"
+
+D10_HSC_file <- "/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D10_HSC.h5"
+
+```
+
+```{r}
+filename <- NULL
+if (grepl("JLF_SLZ", dataset_name)) {
+  filename <- D10_HSC_file
+  matrix_data <- Read10X_h5(filename, use.names = TRUE, unique.features = TRUE)
+} else {
+  counts_file <- NULL
+  features_file <- NULL
+  barcodes_file <- NULL
+  if (grepl("Calvanese_adherent", dataset_name)) {
+    counts_file <- calvanese_adherent_counts_file
+    features_file <- calvanese_adherent_features_file
+    barcodes_file <- calvanese_adherent_barcodes_file
+  } else if (grepl("Calvanese_suspension", dataset_name)) {
+    counts_file <- calvanese_susp_counts_file
+    features_file <- calvanese_susp_features_file
+    barcodes_file <- calvanese_susp_barcodes_file
+  } else if (grepl("Canu", dataset_name)) {
+    counts_file <- canu_counts_file
+    features_file <- canu_features_file
+    barcodes_file <- canu_barcodes_file
+  } else if (grepl("Michaels", dataset_name)) {
+    counts_file <- michaels_counts_file
+    features_file <- michaels_features_file
+    barcodes_file <- michaels_barcodes_file
+  } 
+  counts <- readMM(counts_file)
+  rows <- read.table(features_file)
+  columns <- read.table(barcodes_file)
+                          
+  head(rows)
+  head(columns)
+  
+  rows <- as.character(rows[, 1])
+  columns <- as.character(columns[, 1])
+  head(rows)
+  
+  total_elements <- length(unlist(columns))
+  print(total_elements)
+  
+  matrix_data <- matrix(data = counts, nrow = length(rows), ncol = length(columns))
+  print(dim(matrix_data))
+  rownames(matrix_data) <- rows
+  colnames(matrix_data) <- columns
+  
+  annotLookup <- read.table(lookup_filename, fill = TRUE)
+  geneSymbols <- annotLookup$external_gene_name[match(rownames(matrix_data), annotLookup$ensembl_gene_id)]
+  
+  #Replace any NAs with Ensembl IDs
+  for (i in 1:length(geneSymbols)){
+    if (is.na(geneSymbols[i]) == TRUE){
+      geneSymbols[i] <- rownames(matrix_data)[i]
+    } else if (geneSymbols[i] == "") {
+      geneSymbols[i] <- rownames(matrix_data)[i]
+    }
+  }
+  
+  # check that no remaining NAs 
+  print(sum(is.na(geneSymbols)))
+  
+  #Make gene symbols (or Ensembl IDs) row names
+  rownames(matrix_data) <- make.unique(geneSymbols)
+}
+
+# Following pre-processing rules based on standard workflow
+sobj <- CreateSeuratObject(matrix_data, assay = "RNA", min.cells = 3, min.features = 200)
+```
+
+PART 2: Pre-process data and perform filtering based on number of genes sequenced and the % of mitochondrial transcripts
+
+```{r}
+# Get % of mitochondrial genes
+sobj[["percent.mt"]] <- PercentageFeatureSet(sobj, pattern = "^MT-")
+VlnPlot(sobj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+plot1 <- FeatureScatter(sobj, feature1 = "nCount_RNA", feature2 = "percent.mt", pt.size = 0.01)
+plot2 <- FeatureScatter(sobj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA", pt.size = 0.01)
+plot3 <- FeatureScatter(sobj, feature1 = "nFeature_RNA", feature2 = "percent.mt", pt.size = 0.01)
+
+plot1 + plot2 + plot3
+
+if (grepl("JLF_SLZ", dataset_name)) {
+  sobj <- subset(sobj, subset = nFeature_RNA > 6000 & nFeature_RNA < 14000 & percent.mt > 5 & percent.mt < 10)
+} else if (grepl("Calvanese_adherent", dataset_name)) {
+  sobj <- subset(sobj, subset = nFeature_RNA > 2000 & percent.mt > 5 & percent.mt < 12)
+} else if (grepl("Calvanese_suspension", dataset_name)) {
+  sobj <- subset(sobj, subset = nFeature_RNA > 2500 & percent.mt > 5 & percent.mt < 12)
+} else if (grepl("Canu", dataset_name)) {
+  sobj <- subset(sobj, subset = nFeature_RNA > 2500 & percent.mt > 5 & percent.mt < 12)
+} else if (grepl("Michaels", dataset_name)) {
+  sobj <- subset(sobj, subset = nFeature_RNA > 2000 & percent.mt > 5 & percent.mt < 15)
+}
+
+VlnPlot(sobj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+plot1 <- FeatureScatter(sobj, feature1 = "nCount_RNA", feature2 = "percent.mt", pt.size = 0.02)
+plot2 <- FeatureScatter(sobj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA", pt.size = 0.02)
+plot3 <- FeatureScatter(sobj, feature1 = "nFeature_RNA", feature2 = "percent.mt", pt.size = 0.02)
+
+plot1 + plot2 + plot3
+```
+
+```{r}
+# Use default settings to match Sherry's work
+sobj <- NormalizeData(sobj) 
+sobj <- FindVariableFeatures(sobj)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(sobj), 10)
+
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(sobj)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1 + plot2
+
+# Scale data so mean expression is 0, variance is 1
+all.genes <- rownames(sobj)
+sobj <- ScaleData(sobj, features = all.genes)
+
+sobj <- RunPCA(sobj, features = VariableFeatures(sobj))
+
+FeaturePlot(sobj, features = 'percent.mt', cols = c("lightgrey", "#C3083E"), reduction = "pca")
+FeaturePlot(sobj, features = 'nFeature_RNA', cols = c("lightgrey", "#C3083E"), reduction = "pca")
+
+sobj <- RunUMAP(sobj, dims = 1:10)
+FeaturePlot(sobj, features = 'percent.mt', cols = c("lightgrey", "#C3083E"), reduction = "umap") & NoAxes() 
+FeaturePlot(sobj, features = 'nFeature_RNA', cols = c("lightgrey", "#C3083E"), reduction = "umap")
+```
+
+PART 3: Generate feature plots for each dataset
+
+```{r}
+out_dir = "/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/E1 scRNA-seq comparison/"
+sample = paste0(dataset_name, "/")
+
+gene_list <- c('PTPRC', 'HEMGN', 'HLF', 'RUNX1')
+
+for (feature in gene_list) {
+  filename <- paste0(out_dir, sample, feature, ".tiff")
+  p <- FeaturePlot(sobj, features = feature, cols = c("lightgrey", "#C3083E"), reduction = "umap") & NoAxes()
+  ggsave(filename, plot = p, width = 5, height = 3.6, dpi = 300, device = "tiff")
+}
+
+```

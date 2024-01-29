@@ -1,0 +1,155 @@
+---
+title: "Fowler and Zheng et al. scRNAseq data analysis part 2"
+author: "Julie Chen"
+date: "2024-01017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+SUMMARY: Generate feature plots of critical marker genes on D0 -> D10 differentiation stages (Fig 5G)
+
+```{r}
+#Load packages
+library(Seurat)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+library(ggplot2)
+```
+
+```{r}
+#Load counts matrices from 10x CellRanger runs, starting with D0_hPSC
+D0_hPSC <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D0_hPSC.h5", use.names = TRUE, unique.features = TRUE)
+D1_PPS <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D1_PPS.h5", use.names = TRUE, unique.features = TRUE)
+D2_PPS <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D2_PPS.h5", use.names = TRUE, unique.features = TRUE)
+D3_DLM <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D3_DLM.h5", use.names = TRUE, unique.features = TRUE)
+D4_AE <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D4_AE.h5", use.names = TRUE, unique.features = TRUE)
+D7_HE <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D7_HE.h5", use.names = TRUE, unique.features = TRUE)
+D10_HSC <- Read10X_h5("/Users/juliechen/Julie_Chen/loh lab/Ithaka/E1 scRNAseq analysis/raw_data/D10_HSC.h5", use.names = TRUE, unique.features = TRUE)
+```
+
+
+```{r}
+#Make Seurat objects (pre-processing: keep only genes expressed in at least 3 cells and cells that express at least 200 genes; based on Satija lab Seurat vignettes; processing: based on vlnplot of features), starting with D0_hPSC_seurat
+D0_hPSC_seurat <- CreateSeuratObject(counts = D0_hPSC, min.cells = 3, min.features = 200, project = "D0_hPSC")
+rm(DO_hPSC)
+D0_hPSC_seurat[["percent.mt"]] <- PercentageFeatureSet(D0_hPSC_seurat, pattern = "^MT-")
+before = VlnPlot(D0_hPSC_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+D0_hPSC_seurat <- subset(D0_hPSC_seurat, subset = nFeature_RNA > 7000 & percent.mt > 5 & percent.mt < 10)
+after = VlnPlot(D0_hPSC_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+#Repeat with D1_PPS_seurat
+D1_PPS_seurat <- CreateSeuratObject(counts = D1_PPS, min.cells = 3, min.features = 200, project = "D1_PPS")
+rm(D1_PPS)
+D1_PPS_seurat[["percent.mt"]] <- PercentageFeatureSet(D1_PPS_seurat, pattern = "^MT-")
+before = VlnPlot(D1_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+D1_PPS_seurat <- subset(D1_PPS_seurat, subset = nFeature_RNA > 4000 & percent.mt > 5 & percent.mt < 12)
+after = VlnPlot(D1_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+```
+
+```{r}
+#Repeat with D2_PPS_seurat
+D2_PPS_seurat <- CreateSeuratObject(counts = D2_PPS, min.cells = 3, min.features = 200, project = "D2_PPS")
+rm(D2_PPS)
+D2_PPS_seurat[["percent.mt"]] <- PercentageFeatureSet(D2_PPS_seurat, pattern = "^MT-")
+before = VlnPlot(D2_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+D2_PPS_seurat <- subset(D2_PPS_seurat, subset = nFeature_RNA > 3500 & nFeature_RNA < 8000 & percent.mt > 5 & percent.mt < 11)
+after = VlnPlot(D2_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+#Repeat with D3_DLM_seurat
+D3_DLM_seurat <- CreateSeuratObject(counts = D3_DLM, min.cells = 3, min.features = 200, project = "D3_DLM")
+rm(D3_DLM)
+D3_DLM_seurat[["percent.mt"]] <- PercentageFeatureSet(D3_DLM_seurat, pattern = "^MT-")
+before = VlnPlot(D3_DLM_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+D3_DLM_seurat <- subset(D3_DLM_seurat, subset = nFeature_RNA > 5000 & percent.mt > 5 & percent.mt < 10)
+after = VlnPlot(D3_DLM_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+#Repeat with D4_AE_seurat
+D4_AE_seurat <- CreateSeuratObject(counts = D4_AE, min.cells = 3, min.features = 200, project = "D4_AE")
+rm(D4_AE)
+D4_AE_seurat[["percent.mt"]] <- PercentageFeatureSet(D4_AE_seurat, pattern = "^MT-")
+before = VlnPlot(D4_AE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+D4_AE_seurat <- subset(D4_AE_seurat, subset = nFeature_RNA > 5000 & nFeature_RNA < 10500 & percent.mt > 5 & percent.mt < 11)
+after = VlnPlot(D4_AE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+#Make D7 Seurat object
+D7_HE_seurat <- CreateSeuratObject(counts = D7_HE, min.cells = 3, min.features = 200, project = "D7_HE")
+rm(D7_HE)
+D7_HE_seurat[["percent.mt"]] <- PercentageFeatureSet(D7_HE_seurat, pattern = "^MT-")
+before = VlnPlot(D7_HE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+D7_HE_seurat <- subset(D7_HE_seurat, subset = nFeature_RNA > 3000 & nFeature_RNA < 9000 & percent.mt > 5 & percent.mt < 10)
+after = VlnPlot(D7_HE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+#Make D10 Seurat object
+D10_seurat <- CreateSeuratObject(counts = D10_HSC, min.cells = 3, min.features = 200, project = "D10_HSC")
+rm(D10_HSC)
+D10_seurat[["percent.mt"]] <- PercentageFeatureSet(D10_seurat, pattern = "^MT-")
+before = VlnPlot(D10_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+D10_seurat <- subset(D10_seurat, subset = nFeature_RNA > 6000 & nFeature_RNA < 14000 & percent.mt > 5 & percent.mt < 10)
+after = VlnPlot(D10_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+#Combine cells from D0 -> D10 into a single Seurat object and normalize
+combined_seurat <- merge(D0_hPSC_seurat, y = c(D1_PPS_seurat, D2_PPS_seurat, D3_DLM_seurat, D4_AE_seurat, D7_HE_seurat, D10_seurat), add.cell.ids = c("D0", "D1", "D2", "D3", "D4", "D7", "D10"))
+rm(D0_hPSC_seurat, D1_PPS_seurat, D2_PPS_seurat, D3_DLM_seurat, D4_AE_seurat, D7_HE_seurat, D10_seurat)
+
+dim(combined_seurat)
+VlnPlot(combined_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+combined_seurat <- NormalizeData(combined_seurat)
+```
+
+```{r}
+#Feature selection and scaling
+combined_seurat <- FindVariableFeatures(combined_seurat)
+all.genes <- rownames(combined_seurat)
+combined_seurat <- ScaleData(combined_seurat, features = all.genes)
+```
+
+```{r}
+#Perform linear dimensional reduction and non-linear dimensional reduction
+combined_seurat <- RunPCA(combined_seurat, features = VariableFeatures(object=combined_seurat))
+DimPlot(combined_seurat, reduction = "pca")
+
+combined_seurat <- RunUMAP(combined_seurat, dims = 1:10)
+DimPlot(combined_seurat, reduction = "umap")
+
+new.cluster.ids <- c("hPSC", "D1 PPS", "D2 PPS", "D3 DLM", "D4 AE", "D7 HE", "D10 HSC")
+names(new.cluster.ids) <- levels(combined_seurat)
+combined_seurat <- RenameIdents(combined_seurat, new.cluster.ids)
+my_colors <- c('hPSC' = '#5C5C5C', 'D1 PPS' = '#F4AC30', 'D2 PPS' = '#EFDD55', 'D3 DLM' = '#00AC6C', 
+               'D4 AE' = '#2972C3', 'D7 HE' = "#764B9D", 'D10 HSC' = '#C3083E')
+my_colors_2 <- my_colors[order(as.integer(names(my_colors)))]
+DimPlot(combined_seurat, cols = my_colors_2, reduction = "umap", label = TRUE) & NoLegend()
+```
+
+```{r}
+# Generate feature plots for D0 -> D10 differentiation of critical marker genes
+genelist <- c("EFNB2", "GJA5", "CXCR4", "NT5E", "SOX17", "RUNX1", "SPN", "PTPRC", "HLF", "HOXA5", "HOXA9", "IL33", "ALDH1A1", "KCNK17")
+out_dir = "/Users/juliechen/Julie_Chen/loh lab/Soaring Icarus/EV scRNA-seq feature plots/"
+
+for (feature in genelist) {
+  filename <- paste0(out_dir, "D0_D10_", feature, ".tiff")
+  p <- FeaturePlot(combined_seurat, features = feature, cols = c("lightgrey", "#C3083E"), reduction = "umap") & NoAxes()
+  ggsave(filename, plot = p, width = 5, height = 3.6, dpi = 300, device = "tiff")
+}
+```

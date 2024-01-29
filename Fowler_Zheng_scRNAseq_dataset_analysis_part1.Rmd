@@ -1,0 +1,426 @@
+---
+title: "Fowler and Zheng et al. scRNAseq data analysis"
+author: "Sherry Li Zheng; slzheng@stanford.edu"
+last updated: "2024-01-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+PART 1: D0-4 analysis
+
+```{r}
+#Load packages
+library(Seurat)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+```
+
+```{r}
+#Load counts matrices from 10x CellRanger runs, starting with D0_hPSC. Optional code included to visualize raw data.
+D0_hPSC <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D0_hPSC.h5", use.names = TRUE, unique.features = TRUE)
+#counts_per_cell <- Matrix::colSums(D0_hPSC)
+#counts_per_gene <- Matrix::rowSums(D0_hPSC)
+#genes_per_cell <- Matrix::colSums(D0_hPSC>0)
+#cells_per_gene <- Matrix::rowSums(D0_hPSC>0)
+#hist(log10(counts_per_cell+1), main='counts per cell',col='wheat')
+#hist(log10(genes_per_cell+1), main='genes per cell', col='wheat')
+#hist(log10(cells_per_gene+1), main='cells per gene',col='wheat')
+#plot(counts_per_cell, genes_per_cell, log='xy', col='wheat')
+#plot(sort(genes_per_cell), xlab='cell', log='y', main='genes per cell (ordered)')
+```
+
+```{r}
+#Repeat with D1_PPS
+D1_PPS <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D1_PPS.h5", use.names = TRUE, unique.features = TRUE)
+#counts_per_cell <- Matrix::colSums(D1_PPS)
+#counts_per_gene <- Matrix::rowSums(D1_PPS)
+#genes_per_cell <- Matrix::colSums(D1_PPS>0)
+#cells_per_gene <- Matrix::rowSums(D1_PPS>0)
+#hist(log10(counts_per_cell+1), main='counts per cell',col='wheat')
+#hist(log10(genes_per_cell+1), main='genes per cell', col='wheat')
+#hist(log10(cells_per_gene+1), main='cells per gene',col='wheat')
+#plot(counts_per_cell, genes_per_cell, log='xy', col='wheat')
+#plot(sort(genes_per_cell), xlab='cell', log='y', main='genes per cell (ordered)')
+```
+
+```{r}
+#...and D2_PPS
+D2_PPS <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D2_PPS.h5", use.names = TRUE, unique.features = TRUE)
+#counts_per_cell <- Matrix::colSums(D2_PPS)
+#counts_per_gene <- Matrix::rowSums(D2_PPS)
+#genes_per_cell <- Matrix::colSums(D2_PPS>0)
+#cells_per_gene <- Matrix::rowSums(D2_PPS>0)
+#hist(log10(counts_per_cell+1), main='counts per cell',col='wheat')
+#hist(log10(genes_per_cell+1), main='genes per cell', col='wheat')
+#hist(log10(cells_per_gene+1), main='cells per gene',col='wheat')
+#plot(counts_per_cell, genes_per_cell, log='xy', col='wheat')
+#plot(sort(genes_per_cell), xlab='cell', log='y', main='genes per cell (ordered)')
+```
+
+```{r}
+#...and D3_DLM
+D3_DLM <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D3_DLM.h5", use.names = TRUE, unique.features = TRUE)
+#counts_per_cell <- Matrix::colSums(D3_DLM)
+#counts_per_gene <- Matrix::rowSums(D3_DLM)
+#genes_per_cell <- Matrix::colSums(D3_DLM>0)
+#cells_per_gene <- Matrix::rowSums(D3_DLM>0)
+#hist(log10(counts_per_cell+1), main='counts per cell',col='wheat')
+#hist(log10(genes_per_cell+1), main='genes per cell', col='wheat')
+#hist(log10(cells_per_gene+1), main='cells per gene',col='wheat')
+#plot(counts_per_cell, genes_per_cell, log='xy', col='wheat')
+#plot(sort(genes_per_cell), xlab='cell', log='y', main='genes per cell (ordered)')
+```
+
+```{r}
+#...and D4_AE
+D4_AE <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D4_AE.h5", use.names = TRUE, unique.features = TRUE)
+#counts_per_cell <- Matrix::colSums(D4_AE)
+#counts_per_gene <- Matrix::rowSums(D4_AE)
+#genes_per_cell <- Matrix::colSums(D4_AE>0)
+#cells_per_gene <- Matrix::rowSums(D4_AE>0)
+#hist(log10(counts_per_cell+1), main='counts per cell',col='wheat')
+#hist(log10(genes_per_cell+1), main='genes per cell', col='wheat')
+#hist(log10(cells_per_gene+1), main='cells per gene',col='wheat')
+#plot(counts_per_cell, genes_per_cell, log='xy', col='wheat')
+#plot(sort(genes_per_cell), xlab='cell', log='y', main='genes per cell (ordered)')
+```
+
+```{r}
+#Make Seurat objects (pre-processing: keep only genes expressed in at least 3 cells and cells that express at least 200 genes; based on Satija lab Seurat vignettes (https://satijalab.org/seurat/articles/pbmc3k_tutorial); processing: based on vlnplot of features), starting with D0_hPSC_seurat
+D0_hPSC_seurat <- CreateSeuratObject(counts = D0_hPSC, min.cells = 3, min.features = 200, project = "D0_hPSC")
+rm(DO_hPSC)
+D0_hPSC_seurat[["percent.mt"]] <- PercentageFeatureSet(D0_hPSC_seurat, pattern = "^MT-")
+#VlnPlot(D0_hPSC_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D0_hPSC_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D0_hPSC_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D0_hPSC_seurat <- subset(D0_hPSC_seurat, subset = nFeature_RNA > 7000 & percent.mt > 5 & percent.mt < 10)
+#VlnPlot(D0_hPSC_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D0_hPSC_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D0_hPSC_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+```
+
+```{r}
+#Repeat with D1_PPS_seurat
+D1_PPS_seurat <- CreateSeuratObject(counts = D1_PPS, min.cells = 3, min.features = 200, project = "D1_PPS")
+rm(D1_PPS)
+D1_PPS_seurat[["percent.mt"]] <- PercentageFeatureSet(D1_PPS_seurat, pattern = "^MT-")
+#VlnPlot(D1_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D1_PPS_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D1_PPS_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D1_PPS_seurat <- subset(D1_PPS_seurat, subset = nFeature_RNA > 4000 & percent.mt > 5 & percent.mt < 12)
+#VlnPlot(D1_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D1_PPS_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D1_PPS_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+```
+
+```{r}
+#Repeat with D2_PPS_seurat
+D2_PPS_seurat <- CreateSeuratObject(counts = D2_PPS, min.cells = 3, min.features = 200, project = "D2_PPS")
+rm(D2_PPS)
+D2_PPS_seurat[["percent.mt"]] <- PercentageFeatureSet(D2_PPS_seurat, pattern = "^MT-")
+#VlnPlot(D2_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D2_PPS_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D2_PPS_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D2_PPS_seurat <- subset(D2_PPS_seurat, subset = nFeature_RNA > 3500 & nFeature_RNA < 8000 & percent.mt > 5 & percent.mt < 11)
+#VlnPlot(D2_PPS_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D2_PPS_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D2_PPS_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+```
+
+```{r}
+#Repeat with D3_DLM_seurat
+D3_DLM_seurat <- CreateSeuratObject(counts = D3_DLM, min.cells = 3, min.features = 200, project = "D3_DLM")
+rm(D3_DLM)
+D3_DLM_seurat[["percent.mt"]] <- PercentageFeatureSet(D3_DLM_seurat, pattern = "^MT-")
+#VlnPlot(D3_DLM_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D3_DLM_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D3_DLM_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D3_DLM_seurat <- subset(D3_DLM_seurat, subset = nFeature_RNA > 5000 & percent.mt > 5 & percent.mt < 10)
+#VlnPlot(D3_DLM_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D3_DLM_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D3_DLM_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+```
+
+```{r}
+#Repeat with D4_AE_seurat
+D4_AE_seurat <- CreateSeuratObject(counts = D4_AE, min.cells = 3, min.features = 200, project = "D4_AE")
+rm(D4_AE)
+D4_AE_seurat[["percent.mt"]] <- PercentageFeatureSet(D4_AE_seurat, pattern = "^MT-")
+#VlnPlot(D4_AE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D4_AE_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D4_AE_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D4_AE_seurat <- subset(D4_AE_seurat, subset = nFeature_RNA > 5000 & nFeature_RNA < 10500 & percent.mt > 5 & percent.mt < 11)
+#VlnPlot(D4_AE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D4_AE_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D4_AE_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+```
+
+```{r}
+#Combine into a single Seurat object and normalize
+D0_4_seurat <- merge(D0_hPSC_seurat, y = c(D1_PPS_seurat, D2_PPS_seurat, D3_DLM_seurat, D4_AE_seurat), add.cell.ids = c("D0", "D1", "D2", "D3", "D4"))
+rm(D0_hPSC_seurat)
+rm(D1_PPS_seurat)
+rm(D2_PPS_seurat)
+rm(D3_DLM_seurat)
+rm(D4_AE_seurat)
+#dim(D0_4_seurat)
+#VlnPlot(D0_4_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+D0_4_seurat <- NormalizeData(D0_4_seurat)
+```
+
+```{r}
+#Feature selection and scaling
+D0_4_seurat <- FindVariableFeatures(D0_4_seurat)
+all.genes <- rownames(D0_4_seurat)
+D0_4_seurat <- ScaleData(D0_4_seurat, features = all.genes)
+```
+
+```{r}
+#Perform linear dimensional reduction and non-linear dimensional reduction
+D0_4_seurat <- RunPCA(D0_4_seurat, features = VariableFeatures(object=D0_4_seurat))
+DimPlot(D0_4_seurat, reduction = "pca")
+D0_4_seurat <- RunUMAP(D0_4_seurat, dims = 1:10)
+DimPlot(D0_4_seurat, reduction = "umap")
+new.cluster.ids <- c("hPSC", "D1 PPS", "D2 PPS", "D3 DLM", "D4 AE")
+names(new.cluster.ids) <- levels(D0_4_seurat)
+D0_4_seurat <- RenameIdents(D0_4_seurat, new.cluster.ids)
+my_colors <- c('hPSC' = '#5C5C5C', 'D1 PPS' = '#F4AC30', 'D2 PPS' = '#EFDD55', 'D3 DLM' = '#00AC6C', 'D4 AE' = '#2972C3')
+my_colors_2 <- my_colors[order(as.integer(names(my_colors)))]
+DimPlot(D0_4_seurat, cols = my_colors_2, reduction = "umap")
+```
+
+```{r}
+#Make feature plots (Fig 4 and S5)
+FeaturePlot(object = D0_4_seurat, features = 'NANOG', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'SOX2', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'POU5F1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'TBXT', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'MIXL1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'CDX1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'CDX2', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'ETV2', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'TAL1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'HAND1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'KDR', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'PECAM1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'CD34', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'CDH5', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'FOXA2', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'MSGN1', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'NKX2-5', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'SOX17', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'DLL4', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'NR2F2', cols = c("lightgrey", "#EB389A"))
+FeaturePlot(object = D0_4_seurat, features = 'APLNR', cols = c("lightgrey", "#EB389A"))
+```
+
+```{r}
+#Subcluster to look for any mesenchymal populations (Fig S5)
+D0_4_seurat <- FindNeighbors(D0_4_seurat, dims = 1:10)
+D0_4_seurat <- FindClusters(D0_4_seurat, resolution = 0.5)
+D0_4_seurat <- RunUMAP(D0_4_seurat, dims = 1:10)
+DimPlot(D0_4_seurat, reduction = "umap")
+table(Idents(D0_4_seurat))
+
+#Compare D4 mesenchymal population with the other two D4 clusters
+cluster10.markers <- FindMarkers(D0_4_seurat, ident.1 = 10, ident.2 = c(2, 3), min.pct = 0.25)
+head(cluster10.markers, n = 200)
+```
+
+PART 2: Subsetting D4
+
+```{r}
+#Load D4 counts matrix and create Seurat object with specifications determined in PART 1 to make D4-specific Feature Plots (Fig S5)
+D4_AE <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D4_AE.h5", use.names = TRUE, unique.features = TRUE)
+D4_AE_seurat <- CreateSeuratObject(counts = D4_AE, min.cells = 3, min.features = 200, project = "D4_AE")
+rm(D4_AE)
+D4_AE_seurat[["percent.mt"]] <- PercentageFeatureSet(D4_AE_seurat, pattern = "^MT-")
+D4_AE_seurat <- subset(D4_AE_seurat, subset = nFeature_RNA > 5000 & nFeature_RNA < 10500 & percent.mt > 5 & percent.mt < 11)
+D4_AE_seurat <- NormalizeData(D4_AE_seurat)
+D4_AE_seurat <- FindVariableFeatures(D4_AE_seurat)
+all.genes <- rownames(D4_AE_seurat)
+D4_AE_seurat <- ScaleData(D4_AE_seurat, features = all.genes)
+D4_AE_seurat <- RunPCA(D4_AE_seurat, features = VariableFeatures(object=D4_AE_seurat))
+DimPlot(D4_AE_seurat, reduction = "pca")
+D4_AE_seurat <- RunUMAP(D4_AE_seurat, dims = 1:10)
+DimPlot(D4_AE_seurat, reduction = "umap")
+FeaturePlot(object = D4_AE_seurat, features = "DLL4", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))  
+FeaturePlot(object = D4_AE_seurat, features = "SOX17", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))
+FeaturePlot(object = D4_AE_seurat, features = "MKI67", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))
+FeaturePlot(object = D4_AE_seurat, features = "MYL7", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))
+FeaturePlot(object = D4_AE_seurat, features = "SPP1", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))
+FeaturePlot(object = D4_AE_seurat, features = "CNN1", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))
+FeaturePlot(object = D4_AE_seurat, features = "GJA5", pt.size = 1.5, cols = c("lightgrey", "#385FFF"))
+```
+
+PART 3: D7 analysis
+
+```{r}
+#Load counts matrix
+D7_HE <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D7_HE.h5", use.names = TRUE, unique.features = TRUE)
+#counts_per_cell <- Matrix::colSums(D7_HE)
+#counts_per_gene <- Matrix::rowSums(D7_HE)
+#genes_per_cell <- Matrix::colSums(D7_HE>0)
+#cells_per_gene <- Matrix::rowSums(D7_HE>0)
+#(log10(counts_per_cell+1), main='counts per cell',col='wheat')
+#hist(log10(genes_per_cell+1), main='genes per cell', col='wheat')
+#hist(log10(cells_per_gene+1), main='cells per gene',col='wheat')
+#plot(counts_per_cell, genes_per_cell, log='xy', col='wheat')
+#plot(sort(genes_per_cell), xlab='cell', log='y', main='genes per cell (ordered)')
+```
+
+```{r}
+#Make Seurat object
+D7_HE_seurat <- CreateSeuratObject(counts = D7_HE, min.cells = 3, min.features = 200, project = "D7_HE")
+rm(D7_HE)
+D7_HE_seurat[["percent.mt"]] <- PercentageFeatureSet(D7_HE_seurat, pattern = "^MT-")
+#VlnPlot(D7_HE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D7_HE_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D7_HE_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D7_HE_seurat <- subset(D7_HE_seurat, subset = nFeature_RNA > 3000 & nFeature_RNA < 9000 & percent.mt > 5 & percent.mt < 10)
+#VlnPlot(D7_HE_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D7_HE_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D7_HE_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+```
+
+```{r}
+#Normalize and scale
+D7_HE_seurat <- NormalizeData(D7_HE_seurat)
+
+#Feature selection and scaling
+D7_HE_seurat <- FindVariableFeatures(D7_HE_seurat)
+all.genes <- rownames(D7_HE_seurat)
+D7_HE_seurat <- ScaleData(D7_HE_seurat, features = all.genes)
+```
+
+```{r}
+#Perform linear dimensional reduction and non-linear dimensional reduction
+D7_HE_seurat <- RunPCA(D7_HE_seurat, features = VariableFeatures(object=D7_HE_seurat))
+DimPlot(D7_HE_seurat, reduction = "pca")
+D7_HE_seurat <- RunUMAP(D7_HE_seurat, dims = 1:10)
+DimPlot(D7_HE_seurat, reduction = "umap")
+
+new.cluster.ids <- c("D7 HE")
+names(new.cluster.ids) <- levels(D7_HE_seurat)
+D7_HE_seurat <- RenameIdents(D7_HE_seurat, new.cluster.ids)
+my_colors <- c('D7 HE' = '#764B9D')
+my_colors_2 <- my_colors[order(as.integer(names(my_colors)))]
+DimPlot(D7_HE_seurat, cols = my_colors_2, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+```{r}
+#Make Feature Plots (Fig 5 and S6)
+FeaturePlot(object = D7_HE_seurat, features = 'PECAM1', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'RUNX1', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'CD34', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'CDH5', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'KDR', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'CXCR4', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'NT5E', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'KIT', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'GFI1', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'GFI1B', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'SPI1', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'ITGA2B', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'SPN', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'PTPRC', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'HLF', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'TAGLN', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+FeaturePlot(object = D7_HE_seurat, features = 'PDGFRB', cols = c("lightgrey", "#764B9D"), pt.size = 1.5)
+```
+
+```{r}
+#Find the % of mesenchymal cells (Fig S6)
+D7_HE_seurat <- FindNeighbors(D7_HE_seurat, dims = 1:10)
+D7_HE_seurat <- FindClusters(D7_HE_seurat, resolution = 0.5)
+D7_HE_seurat <- RunUMAP(D7_HE_seurat, dims = 1:10)
+DimPlot(D7_HE_seurat, reduction = "umap")
+table(Idents(D7_HE_seurat))
+```
+
+PART 4: D10 analysis
+
+```{r}
+#Load counts matrix from 10x CellRanger run and make Seurat object (pre-processing from Satija lab tutorials)
+D10 <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D10_HSC.h5", use.names = TRUE, unique.features = TRUE)
+D10_seurat <- CreateSeuratObject(counts = D10, min.cells = 3, min.features = 200, project = "D10")
+rm(D10)
+D10_seurat[["percent.mt"]] <- PercentageFeatureSet(D10_seurat, pattern = "^MT-")
+#VlnPlot(D10_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(D10_seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(D10_seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+D10_seurat <- subset(D10_seurat, subset = nFeature_RNA > 6000 & nFeature_RNA < 14000 & percent.mt > 5 & percent.mt < 10)
+dim(D10_seurat)
+#VlnPlot(D10_seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+D10_seurat <- NormalizeData(D10_seurat)
+D10_seurat <- FindVariableFeatures(D10_seurat)
+all.genes <- rownames(D10_seurat)
+D10_seurat <- ScaleData(D10_seurat, features = all.genes)
+D10_seurat <- RunPCA(D10_seurat, features = VariableFeatures(D10_seurat))
+DimPlot(D10_seurat, reduction = "pca")
+D10_seurat <- RunUMAP(D10_seurat, dims = 1:10)
+DimPlot(D10_seurat, reduction = "umap", , pt.size = 1.5)
+```
+
+```{r}
+#Make Feature Plots (Fig 6 and S6-7)
+FeaturePlot(object = D10_seurat, features = 'CD34', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'CDH5', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'HLF', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'PTPRC', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'MECOM', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'MLLT3', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'RUNX1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'SPINK2', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'MEIS1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'MYB', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'KIT', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'NT5E', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'GFI1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'GFI1B', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'SPI1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'ITGA2B', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'SPN', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'HOXA9', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'HMGA2', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'PRDM16', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'HOPX', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'TAGLN', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'PDGFRB', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'GATA1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'IRF8', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'IL7R', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'PECAM1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'HBE1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'APOA1', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+FeaturePlot(object = D10_seurat, features = 'PDGFRA', cols = c("lightgrey", "#C3083E"), pt.size = 2.5)
+```
+
+```{r}
+#Find the % of mesenchymal cells (Fig 6 and S6)
+D10_seurat <- FindNeighbors(D10_seurat, dims = 1:10)
+D10_seurat <- FindClusters(D10_seurat, resolution = 0.5)
+D10_seurat <- RunUMAP(D10_seurat, dims = 1:10)
+DimPlot(D10_seurat, reduction = "umap")
+D10.markers <- FindAllMarkers(D10_seurat, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+D10.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 5, order_by = avg_log2FC)
+table(Idents(D10_seurat))
+```

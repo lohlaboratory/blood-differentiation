@@ -1,0 +1,158 @@
+---
+title: "Fowler and Zheng et al. Calvanese integration"
+author: "Sherry Li Zheng; slzheng@stanford.edu"
+last updated: "2024-01-17"
+---
+
+```{r}
+#Load packages
+library(Seurat)
+library(SeuratDisk)
+library(tidyverse)
+library(patchwork)
+library(reticulate)
+library(dplyr)
+library(RCurl)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library("rhdf5")
+library(scCustomize)
+library(viridis)
+library(RColorBrewer)
+```
+
+```{r}
+#Load Calvanese 5 and 5.5 week aorta counts matrix (from https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE162950)
+aorta1 <- read.csv(file = "/Users/sherryzheng/Documents/Calvanese_aorta_data/GSM4968832_Aorta-5wk-555.csv", sep = ",", row.names = 1)
+aorta2 <- read.csv(file = "/Users/sherryzheng/Documents/Calvanese_aorta_data/GSM4968833_Aorta-5wk-575.csv", sep = ",", row.names = 1)
+```
+
+```{r}
+#Look at top of counts matrix
+head(aorta1)
+head(aorta2)
+#columns are cells, rows are genes (listed here by Ensemble ID)
+```
+
+```{r}
+#Change Ensembl IDs to gene symbols
+
+#Get gene symbols from human dataset
+geneSymbols <- mapIds(org.Hs.eg.db, keys = rownames(aorta1), keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
+
+#Replace any NAs with Ensembl IDs
+for (i in 1:length(geneSymbols)){
+  if (is.na(geneSymbols[i]) == TRUE){
+    geneSymbols[i] <- names(geneSymbols)[i]
+  }
+}
+
+#Make gene symbols (or Ensembl IDs) row names
+rownames(aorta1) <- make.unique(geneSymbols)
+rownames(aorta2) <- make.unique(geneSymbols)
+
+#Check that new data frame has gene symbols as row names
+head(aorta1)
+head(aorta2)
+```
+```{r}
+#Make Seurat object out of the re-named genes counts matrix
+aorta1 <- CreateSeuratObject(aorta1)
+aorta2 <- CreateSeuratObject(aorta2)
+aorta <- merge(aorta1, y = aorta2, add.cell.ids = c("15a", "15b"), project = "aorta")
+
+rm(aorta1)
+rm(aorta2)
+
+#Look at Seurat object
+head(aorta)
+```
+
+```{r}
+#QC
+
+#Make a column of %mitochondrial genes
+aorta[["percent.mt"]] <- PercentageFeatureSet(aorta, pattern = "^MT.")
+head(aorta)
+
+# Visualize QC metrics
+VlnPlot(aorta, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+plot1 <- FeatureScatter(aorta, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(aorta, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+```
+
+```{r}
+#Subset
+#aorta <- subset(aorta, subset = nFeature_RNA > 2000 & nFeature_RNA < 7000 & percent.mt > 0.1 & percent.mt < 0.5)
+#VlnPlot(aorta, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+#plot1 <- FeatureScatter(aorta, feature1 = "nCount_RNA", feature2 = "percent.mt")
+#plot2 <- FeatureScatter(aorta, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+#plot1 + plot2
+
+#Processing: normalize and find variable features
+aorta <- NormalizeData(aorta)
+aorta <- FindVariableFeatures(aorta, selection.method = "vst", nfeatures = 2000)
+```
+
+```{r}
+#Read in D10 HSC-like cell counts matrix and make Seurat object
+D10 <- Read10X_h5("/Users/sherryzheng/Documents/SIDE_h5/D10_HSC.h5", use.names = TRUE, unique.features = TRUE)
+D10 <- CreateSeuratObject(counts = D10, min.cells = 3, min.features = 200, project = "D10")
+D10[["percent.mt"]] <- PercentageFeatureSet(D10, pattern = "^MT-")
+```
+
+```{r}
+#Subset, normalize, and find variable features
+VlnPlot(D10, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+plot1 <- FeatureScatter(D10, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(D10, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+D10 <- subset(D10, subset = nFeature_RNA > 2500 & nFeature_RNA < 9000 & percent.mt > 5 & percent.mt < 10)
+dim(D10)
+VlnPlot(D10, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+D10 <- NormalizeData(D10)
+D10 <- FindVariableFeatures(D10, selection.method = "vst", nfeatures = 2000)
+```
+
+```{r}
+#Perform integration based on Satija lab vignettes (https://satijalab.org/seurat/articles/integration_introduction.html)
+list <- list(Object_name1 = aorta, Object_name2 = D10)
+features <- SelectIntegrationFeatures(object.list = list)
+anchors <- FindIntegrationAnchors (object.list = list, anchor.features = features)
+integrated_dataset <- IntegrateData(anchorset = anchors)
+DefaultAssay(integrated_dataset) <- "integrated"
+```
+
+```{r}
+#Run standard visualization and clustering workflows (Figs 6 and S7)
+integrated_dataset <- ScaleData(integrated_dataset, verbose = FALSE)
+integrated_dataset <- RunPCA(integrated_dataset, npcs = 30, verbose = FALSE)
+integrated_dataset <- RunUMAP(integrated_dataset, reduction = "pca", dims = 1:30)
+integrated_dataset <- FindNeighbors(integrated_dataset, reduction = "pca", dims = 1:30)
+integrated_dataset <- FindClusters(integrated_dataset, resolution = 0.5)
+
+integrated_dataset_original <- integrated_dataset
+
+DimPlot(integrated_dataset, reduction = "umap", label = TRUE, repel = TRUE)
+DimPlot(integrated_dataset, reduction = "umap", group.by = "orig.ident")
+DimPlot(integrated_dataset, reduction = "umap", split.by = "orig.ident")
+
+integrated_dataset <- RenameIdents(integrated_dataset, `13` = "epithelial", `17` = "epithelial", `19` = "mesenchymal", `14` = "mesenchymal", `5` = "mesenchymal", `8` = "mesenchymal", `10` = "mesenchymal", `1` = "endothelial", `11` = "endothelial", `4` = "endothelial", `7` = "Gran/Mono/Mac", `15` = "erythroid", `0` = "HSC", `2` = "HSC", `3` = "HSC", `6` = "HSC", `9` = "HSC", `16` = "other", `12` = "other", `18` = "other")
+
+DimPlot(integrated_dataset, reduction = "umap", label = TRUE, split.by = "orig.ident")
+DimPlot(integrated_dataset, label = TRUE)
+DimPlot(integrated_dataset, split.by = "orig.ident")
+
+FeaturePlot_scCustom(integrated_dataset, features = c("PTPRC", "HLF", "MECOM", "SPINK2", "RUNX1"), pt.size = 1.5, split.by = "orig.ident")
+FeaturePlot_scCustom(integrated_dataset, features = c("CD14", "LYZ", "HBE1", "APOA1", "PDGFRA"), pt.size = 1.5, split.by = "orig.ident")
+FeaturePlot(integrated_dataset, features = c("MLLT3", "HOXA9", "CDH5"), pt.size = 1.5, cols = rev(plasma(10)), split.by = "orig.ident")
+```
+
+```{r}
+#Idents(integrated_dataset) <- factor(Idents(integrated_dataset), levels = c("other", "epithelial", "Gran/Mono/Mac", "erythroid", "mesenchymal", "endothelial", "HSC"))
+#markers.to.plot <- c("RUNX1", "PTPRC", "SPN", "HLF", "RUNX1", "MECOM", "GFI1", "MYB", "CDH5", "KDR", "TIE1", "APLNR", "NRP2", "GJA5", "CXCR4", "COL1A1", "PDGFRA", "CXCL12", "POSTN", "PTN", "HBE1", "HBZ", "GYPA", "LYZ", "RNASE2", "C1QA", "CD14", "LYVE1", "EPCAM", "AFP")
+#DotPlot(integrated_dataset, features = markers.to.plot, cols = c("blue", "red"), dot.scale = 8, split.by = "orig.ident") + RotatedAxis ()
+```
