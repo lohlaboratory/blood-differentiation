@@ -1,0 +1,279 @@
+---
+title: "Fowler and Zheng et al. Bulk RNA-Seq"
+author: "Jonas Fowler; jlfowler@stanford.edu"
+output: html_notebook
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "~/Box Sync/Loh Lab DropBox Files/RNA-Seq/Bulk/SI-AV")
+```
+
+```{r}
+library(tximport)
+library(BUSpaRse)
+library(DESeq2)
+library()
+library("ggplot2")
+library("pheatmap")
+library("RColorBrewer")
+
+```
+
+
+```{r}
+samples = read.delim(file = "Sample-Name-Files/All_samples input_JF.txt", header = TRUE)
+samples = as.data.frame(samples)
+samples
+```
+
+```{r}
+files = file.path(samples$dir, samples$file)
+
+names(files) <- samples$sample
+
+tx2gene = read.delim(file = "Mapping_Kallisto/homo_sapiens/transcripts_to_genes.txt")
+tx2gene = tx2gene[c(1, 3)]
+head(tx2gene)
+```
+
+```{r}
+#library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+#txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+#k <- keys(txdb, keytype = "GENEID")
+#df <- select(txdb, keys = k, keytype = "GENEID", columns = "TXNAME")
+#tx2gene <- df[, 2:1]  # tx ID, then gene ID
+
+# Specify other attributes
+#tr2g_hs <- tr2g_ensembl("Homo sapiens", ensembl_version = 96, other_attrs = "description", gene_biotype_use = "cellranger")
+#> Querying biomart for transcript and gene IDs of Homo sapiens
+#head(tr2g_hs)
+```
+
+```{r}
+setwd("~/Box Sync/Loh Lab DropBox Files/RNA-Seq/Bulk/SI-AV/Mapping_Kallisto")
+txi = tximport(files, type = "kallisto", tx2gene = tx2gene)
+```
+
+
+```{r}
+names(txi)
+```
+
+```{r}
+write.csv(as.data.frame(txi$counts), file="R_Results/Counts-Matrix.csv")
+```
+
+
+```{r}
+head(txi$abundance)
+```
+
+```{r}
+#set up DESeq table and calculate diff expressed genes
+allsamples <- DESeqDataSetFromTximport(txi, colData = samples, design = ~condition)
+```
+
+```{r}
+order1 = read.table("Sample-Name-Files/samples_order_JF.csv")
+
+order1 = as.vector(order1$V1)
+
+order2 = read.delim("Sample-Name-Files/conditionorder_JF.csv", header = FALSE)
+
+order2 = as.vector(order2$V1)
+```
+
+
+```{r}
+#convert all to factor (you don’t have to set up this many different conditions if you don’t have such comparisons. As long as you convert whatever conditions you have to a “factor” should be ok.  
+#convert all to 
+allsamples$sample = factor(allsamples$sample, levels = c(order1))
+allsamples$sample = factor(allsamples$sample)
+allsamples$replicate = factor(allsamples$replicate)
+allsamples$condition = factor(allsamples$condition)
+allsamples$timepoint = factor(allsamples$timepoint)
+allsamples$replicate_condition = factor(allsamples$replicate_condition)
+allsamples$replicate_condition_timepoint = factor(allsamples$replicate_condition_timepoint)
+
+```
+
+```{r}
+#set filter cut-off at this point; estimate total depth first
+allsamples <- estimateSizeFactors(allsamples)
+
+```
+
+```{r}
+#set filter for cut-off; 5 counts in at least 2 samples.
+idx <- rowSums( counts(allsamples, normalized=TRUE) >= 5 ) >= 2
+#idx <- rowSums( counts(allsamples, normalized=TRUE) >= 10 ) >= 3
+allsamples <- allsamples[idx,]
+```
+
+```{r}
+allsamples$condition <- factor (allsamples$condition, levels = c("ESC", "PPS1", "PPS2", "LM", "ART", "HE", "HEsort", "HSC10", "HSCsort", "HSC11", "HSC13", "HSC15", "CB34", "CBHSC", "CBMPP", "CBPROG", "AGMdENDO", "AGMvENDO", "AGMdHSC","AGMvHSC", "AGMdHEM", "AGMvHEM"))
+```
+
+
+```{r}
+allsamples <- DESeq(allsamples)
+```
+
+```{r}
+res <- results(allsamples)
+res
+```
+
+
+
+```{r}
+res <- results(allsamples, contrast=c("condition","AGMvHEM","ESC"))
+summary(res)
+
+sum(res$padj < 0.1, na.rm=TRUE)
+
+resOrdered <- res[order(res$pvalue),]
+resOrdered
+```
+
+```{r}
+# firstcondition <- "AGMvHSC"
+# vscondition <- c("ESC", "PPS1", "PPS2", "LM", "ART", "HE", "HEsort", "HSC10", "HSC11", "HSC13", "HSC15", "CB34", "CBHSC", "CBMPP", "CBPROG", "AGMdENDO", "AGMvENDO", "AGMdHSC","HSCsort", "AGMdHEM", "AGMvHEM")
+# for (x in vscondition) {
+#    res <- results(allsamples, contrast=c("condition",firstcondition,x))
+#    resOrdered <- res[order(res$pvalue),]
+#    write.csv(as.data.frame(resOrdered), file=sprintf("R_Results/DEGs/DEGs_AGMvHSC-vs-%s.csv",x))
+# }
+```
+
+```{r}
+res <- results(allsamples, contrast=c("condition","AGMvHSC","AGMvHEM"), lfcThreshold = 2)
+resOrdered <- res[order(res$pvalue),]
+
+resOrdered
+```
+
+```{r}
+summary(res)
+```
+
+
+```{r}
+DESeq2::plotMA(res, ylim=c(-4,4))
+```
+
+```{r}
+resLFC <- lfcShrink(allsamples, coef="condition_AGMvHEM_vs_ESC", type="apeglm")
+resLFC
+```
+
+
+```{r}
+DESeq2::plotMA(resLFC, ylim=c(-4,4))
+```
+
+```{r}
+gene <- "KDR"
+df <- plotCounts(allsamples, gene=gene, intgroup="condition", returnData=TRUE)
+
+  ggplot(df, aes(x=condition, y=count)) +
+    geom_point(aes(colour = samples$replicate, size = 3)) +
+    scale_y_continuous(trans = "log10") +
+    ggtitle(gene) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(x="Cell Type", y="Log(Normalized Count)") +
+    theme(legend.position='none') +
+    scale_color_manual(values = c("black", "gray55")) +
+    theme(axis.text.x = element_text(angle = 90, color= "black"))
+```
+
+
+```{r}
+#"ATF3", "HES1", "HIF3A", "HMGA2", "MAFF", "MECOM", "MEIS1"
+# genelist <- c("AVP", "BMI1", "CD34", "CDH5", "CDKN1A", "CDKN2A", "CTNNAL1", "CXCL12", "CXCR4", "DLL4", "FGD5", "FOXO1", "GATA1", "GATA3", "GFI1", "GJA5", "GYS1", "HAND1", "HIF1A", "HIF3A", "HK1", "HLF", "HOPX", "HOXA1", "HOXA1", "HOXA2", "HOXA3", "HOXA4", "HOXA5", "HOXA6", "HOXA7", "HOXA9", "HOXA10", "HOXA11", "HOXA13", "HOXB1", "HOXB2", "HOXB3", "HOXB4", "HOXB5", "HOXB6", "HOXB7", "HOXB8", "HOXB9", "HOXB13", "IGF2", "IGFBP3", "IL7R", "ITGA3", "ITGA6", "KITLG", "LAMP1", "LGR5", "MECOM", "MEIS1", "MIXL1", "MLLT3", "NANOG", "PKM", "PRDM16", "PROCR", "PROM1", "PTPRC", "RUNX1", "SLC2A1", "SOX17", "SPN", "STAT3", "TBXT", "TDGF1", "THY1", "VEGFA")
+# for (gene in genelist) {
+#   df <- plotCounts(allsamples, gene=gene, intgroup="condition", returnData=TRUE)
+# 
+#   ggplot(df, aes(x=condition, y=count)) +
+#     geom_point(aes(colour = samples$replicate, size = 3)) +
+#     scale_y_continuous(trans = "log10") +
+#     ggtitle(gene) +
+#     theme(plot.title = element_text(hjust = 0.5)) +
+#     labs(x="Cell Type", y="Log(Normalized Count)") +
+#     theme(legend.position='none') +
+#     scale_color_manual(values = c("black", "gray55")) +
+#     theme(axis.text.x = element_text(angle = 90, color= "black"))
+# 
+#   ggsave(filename = sprintf("R_Results/Gene-Plots/%s.pdf",gene), width = 7.29, height = 4.51 )
+# }
+```
+
+```{r}
+vsd <- vst(allsamples, blind=FALSE)
+rld <- rlog(allsamples, blind=FALSE)
+head(assay(vsd), 3)
+```
+
+```{r}
+# this gives log2(n + 1)
+ntd <- normTransform(allsamples)
+library("vsn")
+meanSdPlot(assay(ntd))
+```
+
+```{r}
+meanSdPlot(assay(vsd))
+```
+
+```{r}
+meanSdPlot(assay(rld))
+
+```
+
+```{r}
+select <- order(rowMeans(counts(allsamples,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+df <- as.data.frame(colData(allsamples)[,c("condition","replicate")])
+pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)
+
+```
+
+```{r}
+pheatmap(assay(vsd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)
+```
+
+
+```{r}
+pheatmap(assay(rld)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)
+```
+
+```{r}
+sampleDists <- dist(t(assay(vsd)))
+```
+
+```{r}
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$replicate, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+```
+
+```{r}
+pcaData <- plotPCA(vsd, intgroup=c("condition", "cellsource", "replicate"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+ggplot(pcaData, aes(PC1, PC2, color=condition, shape=replicate)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()
+```
+
+
